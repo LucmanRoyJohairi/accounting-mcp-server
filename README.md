@@ -8,7 +8,10 @@ First, clone or pull this repository to your local machine and install the requi
 pip install -r requirements.txt
 ```
 
-## ⚙️ Step 2: Configure Claude Desktop MCP Server
+## 📂 Step 2: Set Up the Data Folder
+If you cloned this project directly from GitHub, you will need to manually add a `data` folder to the root directory and extract the contents of `repo-data.zip` (attached in the email) into it. If you are using the attached zip file instead, this folder and its contents are already included. *(Note: The data folder was excluded from the repository to protect data privacy).*
+
+## ⚙️ Step 3: Configure Claude Desktop MCP Server
 You need to tell Claude Desktop where your local server lives. 
 1. Open your Claude Desktop configuration file (usually found at `%APPDATA%\Claude\claude_desktop_config.json` on Windows). Alternatively, go to `Claude Desktop > Settings > Storage > Manage > Open Folder` and open the `claude_desktop_config.json` file
 2. Add your local server to the `mcpServers` object, pointing to your project directory.
@@ -25,10 +28,9 @@ You need to tell Claude Desktop where your local server lives.
     }
   }
 }
-
 ```
 
-## 🧠 Step 3: Install the Custom Skill in Claude Desktop
+## 🧠 Step 4: Install the Custom Skill in Claude Desktop
 Because Claude Desktop runs in a sandboxed environment, custom skills must be added directly via the user interface.
 
 1. Open your **Claude Desktop Client**.
@@ -41,7 +43,7 @@ Because Claude Desktop runs in a sandboxed environment, custom skills must be ad
    * **Instructions / Contents:** *(Paste the full step-by-step rules matrix and formatting rules)*
 6. Click **Save**.
 
-## 🏃‍♂️ Step 4: Run a Test Pass
+## 🏃‍♂️ Step 5: Run a Test Pass
 Open a brand new chat window in Claude Desktop and paste the sample prompt below to verify the MCP tools and the skill formatting are working seamlessly together.
 
 **Sample Prompt:**
