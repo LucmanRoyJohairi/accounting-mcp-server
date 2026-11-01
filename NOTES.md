@@ -80,13 +80,18 @@ To preserve strict system safety boundaries, the automated skill acts as an opti
 
 ## 4. What Isn't Finished
 
-* The system currently outputs an airtight review list but lacks the capability to draft the final vendor communications. A planned feature is to generate copy-pasteable email drafts for Sanne, allowing her to contact contractors instantly without manual writing.
+* The system currently outputs an airtight review list but lacks the capability to draft the final contractor communications. A planned feature is to generate copy-pasteable email drafts for Sanne, allowing her to contact contractors instantly without manual writing.
 
 * The pipeline has only been validated against the initial 10-invoice baseline. The remaining 30 invoices in the `data/invoices` directory still need to be processed sequentially using the mapping tool to complete the full project audit.
 
 * The prompt logic is currently limited to auditing standard invoice submissions and does not account for credit tracking under Article 4.8. The pipeline cannot yet ingest separate credit invoices or dynamically recalculate the state of a work order identifier when a contractor issues an offset or correction.
 
-* Currently, the system can display mismatches between the machine audit and Sanne's 10 historical verdicts, but it lacks a write-back mechanism to remember her decisions.
+* Currently, the system can display mismatches between the machine audit and Sanne's 10 historical verdicts, but it lacks a write-back mechanism to remember her decisions if she chooses to overrule
+
+* the front-end Deviation Cards have not yet been built. The three interactive prompts ([Approve Undisputed Portion Only], [Override & Pay in Full], and [Request Contractor Clarification]) do not exist yet and need to be implemented and wired to the workflow.
+
+* Currently the REVIEW_LIST.md only contains results for 10 invoices instead of the required 40. The remaining 30 invoices could not be processed in this run due to limitations caused by the token usage block.
+
 ---
 
 
@@ -108,7 +113,7 @@ To preserve strict system safety boundaries, the automated skill acts as an opti
 
 * Instead, she receives a Clean Proposed Verdict Interface structured down to the cent.
 
-*  If the system is unsure, the invoice status changes to Hold, accompanied by an Itemized Deviation Card. This card isolates the literal invoice line description, quotes the specific broken framework article, provides the exact calculation of the financial leak, and presents three clear actionable prompts: `[Approve Undisputed Portion Only]`, `[Override & Pay in Full]`, or `[Request Contractor Clarification]`.
+*  If the system is unsure, the invoice status changes to Hold. [PLANNED DESIGN] This will be accompanied by an Itemized Deviation Card that isolates the literal invoice line description, quotes the specific broken framework article, provides the exact calculation of the financial leak, and presents three clear actionable prompts: [Approve Undisputed Portion Only], [Override & Pay in Full], or [Request Contractor Clarification].
 
 ---
 
@@ -122,4 +127,4 @@ To preserve strict system safety boundaries, the automated skill acts as an opti
 
 ## 4. When she overrules the solution, what happens next?
 
-* If Sanne overrules a flag (e.g., she approves an indexation skip because she knows the work was delayed by Woonkring Oostervelde themselves), she inputs her override note directly into the manual verification sheet (`Consultee-verdicts.csv`).
+* If Sanne overrules a flag (e.g., she approves an indexation skip because she knows the work was delayed by Woonkring Oostervelde themselves), she inputs her override note directly into the manual verification sheet (`sanne-verdicts.csv`).
