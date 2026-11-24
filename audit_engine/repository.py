@@ -53,11 +53,14 @@ def fetch_work_order(work_order_id: str) -> dict:
     if row.empty:
         return {"error": f"Work order {work_order_id} not found."}
 
+    record = row.to_dict(orient="records").pop(0)
     col_map = MAPPING.get("csv_columns", {})
     return {
         col_map.get(k, k): (None if pd.isna(v) else v)
-        for k, v in row.iloc.to_dict().items()
+        for k, v in record.items()
     }
+
+
 
 
 def fetch_indexed_price_list() -> list[dict]:

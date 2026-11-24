@@ -50,7 +50,7 @@ def read_invoice_content(filename: str) -> dict:
         "filename": filename,
         "detected_contractor": contractor,
         "detected_work_orders": detected_wos,
-        "detected_work_order": detected_wos if detected_wos else None,
+        "detected_work_order": next(iter(detected_wos), None),
         "detected_execution_date": parse_dutch_execution_date(content),
         "is_credit_note": is_credit_note(content),
         "raw_text": content,
