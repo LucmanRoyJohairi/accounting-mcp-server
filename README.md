@@ -1,50 +1,89 @@
-# 🚀 Oostervelde Invoice Auditor - Setup Guide
+# 🧾 Contract Audit (MCP Server)
 
-Follow these steps to connect the local MCP server and install the custom invoice auditing skill into your Claude Desktop client.
+A deterministic Model Context Protocol (MCP) server and AI audit skill built to automate monthly contractor invoice compliance checks for **Woonkring Oostervelde**.
 
-## 🛠️ Step 1: Clone & Install Dependencies
-First, clone or pull this repository to your local machine and install the required Python libraries.
+It cross-references contractor invoices against the **2025–2027 Maintenance Framework Agreement (Article 4)**, master price lists, and work-order exports—flagging overcharges, calculating cent-exact variances, and generating dispute-ready audit dossiers.
+
+---
+
+## ✨ Key Capabilities
+
+* 🧮 **Deterministic Financial Math:** Offloads all currency rounding, 2026 inflation indexation (`+3.2%`), and VAT splits (`9%` vs. `21%`) to Python rather than LLM estimation.
+* 📄 **Multi-Contractor Parsing:** Normalizes inconsistent invoice layouts and Dutch date formats (`YYYY-MM-DD`, `DD-MM-YYYY`, `18 december 2025`) across all four maintenance partners (**Hoekstra**, **De Wit**, **Bosman**, and **Jansen**).
+* ⚖️ **Article 4 Compliance Checks:**
+  * 💰 **Art. 4.1 & 4.2 (Pricing & Indexation):** Validates unit rates against `price-agreement-2025.csv` and enforces the January 1, 2026 indexation boundary based on *execution date*.
+  * 🚨 **Art. 4.3 (Call-Out Fees):** Restricts `voorrijkosten spoed` (`H06`, `B05`, `J05`) strictly to urgent (`spoed`) work orders (max once per order).
+  * ⏱️ **Art. 4.4 (Labor Ceilings):** Enforces `max_labor_hours` unless pre-approved with a valid `MU-xxxx` token.
+  * 🚧 **Art. 4.5 (Additional Work / Meerwerk):** Enforces the €250.00 unapproved threshold and full-rejection cliff edge (`> €250.00` without a `GA-xxxx` approval code).
+  * 🏷️ **Art. 4.6 (Dual-Rate VAT):** Verifies `9%` VAT applies exclusively to painting labor (`W01`, `W04`) on properties older than 2 years.
+  * 🔍 **Art. 4.8 & 4.9 (System Integrity):** Scans across all invoices to detect duplicate work-order billing, credit notes, and unknown work orders.
+  * ✂️ **Art. 4.10 (Partial Payment Split):** Separates invoices into undisputed payable amounts and formal dispute amounts.
+
+---
+
+## 📁 Project Structure
+
+```text
+accounting-mcp-server/
+├── server.py                             # FastMCP server & tool definitions
+├── audit_engine/
+│   ├── __init__.py
+│   ├── parsers.py                        # Path-safe file reader, WO/credit/date extractors
+│   ├── repository.py                     # CSV/JSON loaders & duplicate work-order scanner
+│   └── calculator.py                     # Cent-exact Article 4 pricing, meerwerk & VAT math
+├── .claude/
+│   └── skills/
+│       └── audit-invoices-skills.md      # Claude audit workflow & output schema
+├── data/
+│   ├── invoices/                         # Raw contractor invoice .txt files
+│   ├── reference/
+│   │   ├── contract-excerpt.md           # Original Dutch contract (Article 4)
+│   │   ├── contract-excerpt-translated.md
+│   │   ├── sanne-verdicts.csv            # Manual baseline verdicts (first 10 invoices)
+│   │   ├── task-audit-transcript.md      # Discovery interview notes
+│   │   └── translation-mapping.json      # Schema & Dutch business-term code mappings
+│   ├── price-agreement-2025.csv          # Master 2025 contractor price list
+│   └── work-orders-export.csv            # Work order database & approval tokens
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 🚀 Setup & Installation
+
+### 1. Clone & Create Virtual Environment
+```bash
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+### 2. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-## 📂 Step 2: Set Up the Data Folder
-If you cloned this project directly from GitHub, you will need to manually add a `data` folder to the root directory and extract the contents of `repo-data.zip` (attached in the email) into it. If you are using the attached zip file instead, this folder and its contents are already included. *(Note: The data folder was excluded from the repository to protect data privacy).*
-
-## ⚙️ Step 3: Configure Claude Desktop MCP Server
-You need to tell Claude Desktop where your local server lives. 
-1. Open your Claude Desktop configuration file (usually found at `%APPDATA%\Claude\claude_desktop_config.json` on Windows). Alternatively, go to `Claude Desktop > Settings > Storage > Manage > Open Folder` and open the `claude_desktop_config.json` file
-2. Add your local server to the `mcpServers` object, pointing to your project directory.
-3. It should look something like this:
-
-```json
-{
-  "mcpServers": {
-    "accounting-mcp-server": {
-      "command": "C:\\Users\\zero\\projects\\accounting-mcp-server\\venv\\Scripts\\python.exe",
-      "args": [
-        "C:\\Users\\zero\\projects\\accounting-mcp-server\\server.py"
-      ]
-    }
-  }
-}
+### 3. Run the MCP Server
+```bash
+python server.py
 ```
 
-## 🧠 Step 4: Install the Custom Skill in Claude Desktop
-Because Claude Desktop runs in a sandboxed environment, custom skills must be added directly via the user interface.
+---
 
-1. Open your **Claude Desktop Client**.
-2. Navigate to the **Skills / Plugins** tab (or click **Customize** in the sidebar).
-3. Click **Create New Skill**.
-4. Open the local mcp server folder `.claude/skills/audit-invoices-skill.md` and copy its contents.
-5. Paste the respective fields into the UI:
-   * **Name:** `oostervelde-invoice-auditor`
-   * **Description:** `Triggers when the user asks to process, audit, or review contractor invoices for the Oostervelde project, calculate financial variances, verify contract compliance under Article 4, or generate a review list for Sanne.`
-   * **Instructions / Contents:** *(Paste the full step-by-step rules matrix and formatting rules)*
-6. Click **Save**.
+## 🛠️ Exposed MCP Tools
 
-## 🏃‍♂️ Step 5: Run a Test Pass
-Open a brand new chat window in Claude Desktop and paste the sample prompt below to verify the MCP tools and the skill formatting are working seamlessly together.
+| Tool | Purpose |
+| :--- | :--- |
+| `list_invoice_files()` | Returns all invoice filenames in `data/invoices/` sorted alphabetically. |
+| `check_duplicate_work_orders()` | Scans all invoices upfront to flag duplicate work orders and credit notes (Art. 4.8). |
+| `read_invoice_content(filename)` | Safely reads an invoice and extracts contractor name, work order IDs, credit status, and normalized execution date. |
+| `lookup_work_order(work_order_id)` | Retrieves work-order metadata (`job_type`, `maximum_hours_allowed`, `MU-xxxx`, `GA-xxxx`, `house_build_year`). |
+| `get_indexed_price_list()` | Returns 2025 base rates alongside 2026 `+3.2%` indexed prices. |
+| `get_contract_rules()` | Exposes static Article 4 thresholds and tax parameters. |
+| `lookup_term_code(dutch_description, contractor)` | Maps Dutch line-item text to standardized contract codes (`H01`–`J05`). |
+| `audit_invoice_line(...)` | Computes exact cent-rounded pricing, meerwerk cliff-edge penalties, and VAT splits. |
 
-**Sample Prompt:**
-> "Using the oostervelde-invoice-auditor skill, process only these 10 specific files sequentially: h-2026-0031.txt, w-DW26-004.txt, j-F26-0007.txt, h-2026-0038.txt, b-B-26-0102.txt, w-DW26-009.txt, h-2026-0044.txt, w-DW26-011.txt, j-F26-0012.txt, b-B-26-0097.txt found on the data/invoices folder and follow the instructions and layout on the skill."
+---
+
+## 🛡️ Human-in-the-Loop Governance
+This tool operates strictly as an **audit copilot**. It never authorizes payments or contacts contractors directly; all flagged variances require human review and sign-off before dispute notices are issued.
