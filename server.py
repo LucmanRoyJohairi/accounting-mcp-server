@@ -1,107 +1,73 @@
-import os
-import json
-import re
-import pandas as pd
 from fastmcp import FastMCP
+from audit_engine.parsers import (
+    safe_invoice_path,
+    extract_work_orders,
+    is_credit_note,
+    parse_dutch_execution_date,
+)
+from audit_engine.repository import (
+    INVOICES_DIR,
+    MAPPING,
+    get_invoice_filenames,
+    find_duplicate_work_orders,
+    fetch_work_order,
+    fetch_indexed_price_list,
+    resolve_term_code,
+)
+from audit_engine.calculator import calculate_line_audit
 
-# Initialize FastMCP Server
 mcp = FastMCP("OosterveldeInvoiceAuditor")
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-
-# 1. Deterministic Mapping Cache
-def load_mapping():
-    mapping_path = os.path.join(DATA_DIR, "reference", "translation-mapping.json")
-    if os.path.exists(mapping_path):
-        with open(mapping_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    return {}
-
-MAPPING = load_mapping()
-
-# --- ATOMIC TOOLS ---
 
 @mcp.tool()
 def list_invoice_files() -> list[str]:
-    """Lists all available invoice filenames from the invoices directory."""
-    folder = os.path.join(DATA_DIR, "invoices")
-    if not os.path.exists(folder):
-        return []
-    return [f for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+    """Lists all available invoice filenames sorted alphabetically."""
+    return get_invoice_filenames()
+
+
+@mcp.tool()
+def check_duplicate_work_orders() -> dict:
+    """Scans all invoices to detect duplicate work orders across files (Article 4.8)."""
+    return find_duplicate_work_orders()
+
 
 @mcp.tool()
 def read_invoice_content(filename: str) -> dict:
-    """Reads raw invoice text securely with strict local prefix identification."""
-    path = os.path.join(DATA_DIR, "invoices", filename)
-    if not os.path.exists(path):
-        return {"error": f"Invoice {filename} not found."}
-    
-    with open(path, "r", encoding="utf-8") as f:
+    """Reads raw invoice text safely and extracts contractor, work orders, credit status, and execution date."""
+    safe_path = safe_invoice_path(INVOICES_DIR, filename)
+    if not safe_path:
+        return {"error": f"Invalid or missing invoice: {filename}"}
+
+    with open(safe_path, "r", encoding="utf-8") as f:
         content = f.read()
-    
-    # 1. Deterministic work order token scanning
-    wo_match = re.search(r"WO-26-\d{4}", content)
-    detected_wo = wo_match.group(0) if wo_match else None
-    
-    # 2. NEW: Deterministic Contractor Identification via Filename Pattern
+
+    detected_wos = extract_work_orders(content)
     fn_lower = filename.lower()
-    contractor_mapping = {
-        "b-": "Bosman",
-        "h-": "Hoekstra",
-        "j-": "Jansen",
-        "w-": "De Wit"
-    }
-    
-    detected_contractor = None
-    for prefix, contractor in contractor_mapping.items():
-        if fn_lower.startswith(prefix):
-            detected_contractor = contractor
-            break
-        
+    prefixes = MAPPING.get("contractor_prefixes", {})
+    contractor = next((name for p, name in prefixes.items() if fn_lower.startswith(p)), None)
+
     return {
         "filename": filename,
-        "detected_contractor": detected_contractor, # Clean parameter for Claude!
-        "detected_work_order": detected_wo,
-        "raw_text": content
+        "detected_contractor": contractor,
+        "detected_work_orders": detected_wos,
+        "detected_work_order": detected_wos if detected_wos else None,
+        "detected_execution_date": parse_dutch_execution_date(content),
+        "is_credit_note": is_credit_note(content),
+        "raw_text": content,
     }
 
 
 @mcp.tool()
 def lookup_work_order(work_order_id: str) -> dict:
     """Looks up specific work order parameters with normalized columns."""
-    path = os.path.join(DATA_DIR, "work-orders-export.csv")
-    if not os.path.exists(path):
-        return {"error": "Work order database file missing."}
-    
-    df = pd.read_csv(path)
-    row = df[df["wo"] == work_order_id]
-    if row.empty:
-        return {"error": f"Work order {work_order_id} not found."}
-    
-    data = row.iloc[0].to_dict()
-    
-    # Map raw columns to clear schema terms via translation-mapping
-    mapped_data = {}
-    col_map = MAPPING.get("csv_columns", {})
-    for key, val in data.items():
-        new_key = col_map.get(key, key)
-        # Convert NaN values to None for clean JSON compliance
-        mapped_data[new_key] = None if pd.isna(val) else val
-        
-    return mapped_data
+    return fetch_work_order(work_order_id)
+
 
 @mcp.tool()
 def get_indexed_price_list() -> list[dict]:
-    """Returns the 2025 master price list instantly indexed with the 3.2% 2026 inflation modifier."""
-    path = os.path.join(DATA_DIR, "price-agreement-2025.csv")
-    if not os.path.exists(path):
-        return []
-    
-    df = pd.read_csv(path)
-    # Apply deterministic indexation to clean numbers instantly
-    df["price_excl_vat_2026"] = (df["price_excl_vat_2025"] * 1.032).round(2)
-    return df.to_dict(orient="records")
+    """Returns the 2025 master price list alongside the 3.2% 2026 inflation-adjusted prices."""
+    return fetch_indexed_price_list()
+
 
 @mcp.tool()
 def get_contract_rules() -> dict:
@@ -115,25 +81,39 @@ def get_contract_rules() -> dict:
         "historical_invoice_registry_path": "data/invoices",
         "vat_standard_rate": 0.21,
         "vat_historical_labor_rate": 0.09,
-        "vat_historical_labor_age_threshold_years": 2
+        "vat_historical_labor_age_threshold_years": 2,
     }
 
-@mcp.tool()
-def lookup_term_code(dutch_description: str) -> dict:
-    """Resolves raw Dutch invoice strings directly into unified operational item codes."""
-    clean_desc = dutch_description.strip().lower()
-    terms = MAPPING.get("business_terms", {})
-    
-    # Direct dictionary check
-    if clean_desc in terms:
-        return {"matched": True, "code": terms[clean_desc]}
-        
-    # Fallback fuzzy substring scan
-    for key, code in terms.items():
-        if key in clean_desc or clean_desc in key:
-            return {"matched": True, "code": code}
-            
-    return {"matched": False, "code": None}
 
-if __name__ == '__main__':
+@mcp.tool()
+def lookup_term_code(dutch_description: str, contractor: str | None = None) -> dict:
+    """Resolves Dutch invoice descriptions into operational item codes."""
+    return resolve_term_code(dutch_description, contractor)
+
+
+@mcp.tool()
+def audit_invoice_line(
+    item_code: str | None,
+    execution_date: str,
+    billed_unit_price: float,
+    quantity: float,
+    billed_vat_rate: float,
+    house_build_year: int | None = None,
+    is_meerwerk: bool = False,
+    meerwerk_approved_eur: float | None = None,
+) -> dict:
+    """Performs exact cent-rounded math for line pricing, meerwerk cliff-edge, and VAT."""
+    return calculate_line_audit(
+        item_code=item_code,
+        execution_date=execution_date,
+        billed_unit_price=billed_unit_price,
+        quantity=quantity,
+        billed_vat_rate=billed_vat_rate,
+        house_build_year=house_build_year,
+        is_meerwerk=is_meerwerk,
+        meerwerk_approved_eur=meerwerk_approved_eur,
+    )
+
+
+if __name__ == "__main__":
     mcp.run()
