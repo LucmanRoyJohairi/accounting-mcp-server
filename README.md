@@ -1,8 +1,8 @@
 # 🧾 Contract Audit (MCP Server)
 
-A deterministic Model Context Protocol (MCP) server and AI audit skill built to automate monthly contractor invoice compliance checks for **Woonkring Oostervelde**.
+A deterministic Model Context Protocol (MCP) server and AI audit skill built to automate monthly vendor invoice compliance checks against framework maintenance contracts.
 
-It cross-references contractor invoices against the **2025–2027 Maintenance Framework Agreement (Article 4)**, master price lists, and work-order exports—flagging overcharges, calculating cent-exact variances, and generating dispute-ready audit dossiers.
+It cross-references raw contractor invoices against master price agreements, contract clauses, and work-order exports—flagging overcharges, calculating cent-exact variances, and generating dispute-ready audit dossiers. *(Includes a complete sample Dutch housing-maintenance benchmark dataset)*
 
 ---
 
